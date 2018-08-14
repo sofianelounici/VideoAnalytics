@@ -202,7 +202,7 @@ class VideoBoundaries:
         f1 = 2*precision*recall/(precision+recall)
         
         if(verbose):
-            print("With ",tole,"frame(s) of tolerance :\n")
+            print("With ",tolerance,"frame(s) of tolerance :\n")
             print("Recall : ",recall)
             print("Precision :",precision)
             print("F1 :",f1)
