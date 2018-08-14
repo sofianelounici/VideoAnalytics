@@ -8,14 +8,16 @@ from os.path import isfile, join
 
 
 class VideoBoundaries:
-    
+    """ Class VideoBoundaries : Apply methods for shot segmentation using ECR"""
     def __init__(self):
-		""" Performs video boundary detection, using ECR (Edge Change Ratio)"""
-        pass
+        self.fps=0
+        self.listECR=0
+        self.listChangePoints=0
     
     def frame(self, number_frames, video):
         """ Convert video into gray frames"""
         cap = cv2.VideoCapture(video)
+        self.fps = cap.get(cv2.CAP_PROP_FPS)
         i=0
         listImage=[]
         listHist=[]
@@ -28,9 +30,8 @@ class VideoBoundaries:
         self.listImage=listImage
         cap.release()
         cv2.destroyAllWindows()
-        
-    @staticmethod    
-    def convert_frames_to_video(pathIn,pathOut,fps):
+          
+    def convert_frames_to_video(self, pathIn,pathOut):
         """Convert frames into a video"""
         frame_array = []
         files = [f for f in os.listdir(pathIn) if isfile(join(pathIn, f))]
@@ -46,7 +47,7 @@ class VideoBoundaries:
             #inserting the frames into an image array
             frame_array.append(img)
  
-        out = cv2.VideoWriter(pathOut,cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
+        out = cv2.VideoWriter(pathOut,cv2.VideoWriter_fourcc(*'DIVX'), self.fps, size)
  
         for i in range(len(frame_array)):
             # writing to a image array
@@ -79,24 +80,53 @@ class VideoBoundaries:
     def displayECR(self):
         return self.listECR
     
-    def peakId(self, y, threshold, minFrame):
+    def checkMotion(self,y,pi,threshold, step):
+        """ Returns a boolean value to decide if the peak is due to a motion"""
+        isInMotion=False
+        t=[y[pi+j] for j in range(-step,0)]
+        closePeaks=0
+        # We observe the a defined number of frames before the peak
+        for h in t:
+            if h>y[pi]*(0.75): # If we detect peak with comparable level of intensity
+                closePeaks+=1
+        if closePeaks>=len(t)/2: # If a certain amount of peaks with comparable level of intensity
+            isInMotion=True
+        return isInMotion
+    
+    def peakId(self, y, threshold, step):
         """ Returns the list of peaks in the ECR serie"""
-        p = peakutils.indexes(y, thres=threshold, min_dist=1)
+        p = peakutils.indexes(np.array(y), thres=threshold, min_dist=10)
         listP=[p[0]]
         for i in range(1, len(p)):
-            if(p[i]-listP[-1]>minFrame):
+            # We check that the peak is not due to a motion in the image
+            if(self.checkMotion(y, p[i], threshold, step)==False):
                 listP.append(p[i])
         return listP
     
-    def detectCut(self, minFrame):
+    def pooling(self, t, nb):
+        """ Returns a neighbor-average of the ECR series"""
+        for i in range(nb):
+            newT=[]
+            for i in range(1,len(t)-1):
+                newT.append(max(t[i-1], t[i], t[i+1]))
+            t=newT.copy()
+        return newT
+    
+    def detectCut(self, thres, step):
         """ Returns the list of changepoints based on threshold method"""
         divd = lambda x,y: 0 if y==0 else x/y
         n,m = self.listImage[0].shape
         self.listECR=[]
+        # Ratio ECR(n-1,n) / ECR(n-10,n)
         for i in range(1, len(self.listImage)):
-            self.listECR.append(self.ECR(self.listImage[i-1],self.listImage[i], n, m, 5))
-        ecr = self.displayECR()
-        self.listChangePoints = self.peakId(ecr, 0.6, minFrame)   
+            t=self.ECR(self.listImage[i-1],self.listImage[i], n, m, 5)
+            if(i>10):
+                tDelayed = self.ECR(self.listImage[i-10],self.listImage[i], n, m, 5)
+                self.listECR.append(t*(1+tDelayed))
+            else:
+                self.listECR.append(t)
+        ecr = self.pooling(self.displayECR(), 2) #Pooling Operation
+        self.listChangePoints = self.peakId(ecr, thres, step) #Peak Detection
         
     
     def extractClip(self, where, verbose=False):
@@ -114,11 +144,11 @@ class VideoBoundaries:
             start=0
             end=0
             if(j<len(self.listChangePoints)-1 and j>0):
-                start= self.listChangePoints[j]
-                end= self.listChangePoints[j+1]
+                start= self.listChangePoints[j-1]
+                end= self.listChangePoints[j]
             if(j==0):
                 start=0
-                end= self.listChangePoints[j+1]
+                end= self.listChangePoints[0]
             if(j==len( self.listChangePoints)-1):
                 start= self.listChangePoints[j]
                 end=len(self.listImage)
@@ -134,7 +164,7 @@ class VideoBoundaries:
                 
             out=where +'\\video'+ str(j)+'.mp4'
             toConvert = cwd+"\scene"+ str(j)
-            self.convert_frames_to_video(toConvert,out,24)
+            self.convert_frames_to_video(toConvert,out)
             command = "rm  -rf scene"+str(j)
             os.system(command)
         if(verbose):
@@ -143,3 +173,37 @@ class VideoBoundaries:
     def videoCut(self):
         """ Returns the cutted video"""
         return self.VideoCut
+    def accuracy(self, results, tolerance, verbose):
+        actualCP=[]
+        lines = [int(line.rstrip('\n'))-1 for line in open(results)][::-1]
+        false=0
+        missed=0
+        correct=0
+        # Check if the value in a tolerance range is detected
+        for h in self.listChangePoints:
+            t=[h+i for i in range(-tolerance,tolerance+1)]
+            isIn=False
+            v=0
+            for f in t:
+                if f in lines: # Correct case
+                    isIn=True 
+                    v=f
+                    break
+            if(isIn==False): # False position case
+                false=false+1
+            else:
+                lines.remove(v)
+                correct=correct+1
+                
+        missed=len(lines) # Number of shots non  detected
+
+        recall = correct/(correct+missed)
+        precision = correct/(correct+false)
+        f1 = 2*precision*recall/(precision+recall)
+        
+        if(verbose):
+            print("With ",tole,"frame(s) of tolerance :\n")
+            print("Recall : ",recall)
+            print("Precision :",precision)
+            print("F1 :",f1)
+        return recall, precision, f1
