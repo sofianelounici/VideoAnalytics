@@ -1,0 +1,205 @@
+<tr><td>
+  <video id=VideoFrame preload=auto oncanplay='InitControls(this)' ontimeupdate='UpdateTime(this)'>
+    <source src='C:\Users\Sofiane\Desktop\Projects-Notebooks\SceneDetection\godfather-1972-baptism-scene-hd.mp4' type='video/mp4'>
+    <!--source src='data/VideoFrame-848x480-600kb.mp4' type='video/mp4'>
+    <source src='data/VideoFrame-848x480-600kb.webm' type='video/webm'>
+    <source src='data/VideoFrame-848x480-600kb.ogg' type='video/ogg'-->
+  </video>
+<table id="myTable" align="right">
+</table>
+<div class="btn-group">
+  <button onclick="myCreateFunction()">Add Frame</button>
+  <button onclick="myDeleteFunction()">Delete Frame</button>
+</div>
+
+
+
+  
+  <br><br>
+
+<style>
+.btn-group button {
+    background-color: #4CAF50; /* Green background */
+    border: 1px solid green; /* Green border */
+    color: white; /* White text */
+    padding: 10px 24px; /* Some padding */
+    cursor: pointer; /* Pointer/hand icon */
+    float: left; /* Float the buttons side by side */
+}
+
+/* Clear floats (clearfix hack) */
+.btn-group:after {
+    content: "";
+    clear: both;
+    display: table;
+}
+
+.btn-group button:not(:last-child) {
+    border-right: none; /* Prevent double borders */
+}
+
+/* Add a background color on hover */
+.btn-group button:hover {
+    background-color: #3e8e41;
+}
+</style>
+
+
+
+  <input type=button id=butStop value='&#x25FC;' onclick='RewindVideo(VideoFrameVideo);'>
+  <input type=button id=fstbwdbut value='&#x00AB;'           onclick='PlayPause(VideoFrameVideo,this,-2)'>
+  <input type=button id=butStepBwd value='&#x23B9;&#x2329;' onclick='FrameStep(VideoFrameVideo,this,-0.04)'>
+  <input type=button id=snailbut value='~'                  onclick='PlayPause(VideoFrameVideo,this,0.2)'>
+  <input type=button id=playbutton value='&#x25B6;'           onclick='PlayPause(VideoFrameVideo,this,1)'>
+  <input type=button id=butStepFwd value='&#x232A;&#x23B8;' onclick='FrameStep(VideoFrameVideo,this,+0.04)'>
+  <input type=button id=fstfwdbut value='&#x00BB;'           onclick='PlayPause(VideoFrameVideo,this,2)'>
+  <p id="demo"></p>
+  <br>
+  <table><tr>
+    <td><input type=range id=volume min=0 max=1 step=0.1 value=1 onchange='AdjustVolume(VideoFrameVideo,this.value)'>
+    <td><input type=button value='&#x266B;' onclick='Mute(VideoFrameVideo,this)'>
+    <td style="white-space: nowrap;">Lautstärke: <span id=VolumeTxt> 100% </span>
+  </table>
+ <tr><td>
+  <input type=range id=videopos min=0 max=0 step=0.04 onchange='GotoPos(VideoFrameVideo,this.value)'>
+  <!--progress value=3 min=0 max=10 id=videopos-->
+</table>
+
+
+
+
+<script type='text/javascript'>
+
+function getTime(opt) {
+  minsec = opt.value.split(':');
+  return parseFloat( minsec[0]*60 + minsec[1] );
+}
+
+
+function myFunction() {
+    var x = document.getElementById("myBtn").value;
+    document.getElementById("demo").innerHTML = x;
+}
+var inited = false;
+var frameRate=30;
+
+
+function InitControls(video) {
+  if(inited) return;
+  videopos.max = video.duration - 1;
+  videopos.style.width = video.videoWidth;  // video.offsetWidth || video.innerWidth; 
+  StartScene.selected = true;
+  //videopos.style.width = VideoFrameVideoControls.offsetWidth || VideoFrameVideoControls.innerWidth;
+  //video = document.querySelector("VIDEO");
+  //videopos = document.getElementById("");
+  inited = true;
+}
+
+var ratedelta = 0;
+var buttons = [ 'playbutton','fstbwdbut','fstfwdbut','snailbut' ];
+var savedicon = {};
+
+function PlayPause(video,but,rate) {
+  if (video.paused||video.playbackRate + ratedelta != rate) PlayVideo(video,but,rate); else PauseVideo(video); 
+}
+
+function RestoreButtons() {
+  for(butno in buttons) { but_id = buttons[butno]; but = document.getElementById(but_id);
+    if(but_id in savedicon) but.value = savedicon[but_id]; }
+}
+
+function PlayVideo(video,but,rate) {
+  if(video.paused) video.play(); 
+  video.playbackRate = rate; 
+  ratedelta = rate - video.playbackRate;
+  RestoreButtons();
+  if(!(but.id in savedicon)) savedicon[but.id] = but.value;
+  but.value = String.fromCharCode('0x25AE','0x25AE');
+}
+
+function PauseVideo(video) {
+  video.pause(); RestoreButtons();
+}
+
+function FrameStep(video,but,step) {
+  PauseVideo(video);
+  video.currentTime =  video.currentTime + step;
+  UpdateTime(video);
+}
+
+function RewindVideo(video) {
+  PauseVideo(video);
+  video.currentTime =  0;
+  UpdateTime(video);
+}
+
+function UpdateTime(video) {
+  videopos.value = video.currentTime; CheckForScene(video.currentTime);}
+
+function GotoPos(video,newpos) {
+  video.currentTime = newpos; CheckForScene(newpos); }
+
+function SelectScene(video,selector) {
+  minsec = selector.value.split(':');
+  video.currentTime = parseFloat( minsec[0]*60 + minsec[1] );
+  UpdateTime(video);
+  //PlayVideo(video,playbutton,1);
+}
+
+function Mute(video,but) {
+  video.muted = !video.muted;
+  but.style.color = video.muted ? 'silver' : 'black';
+}
+
+function AdjustVolume(video,value) {
+  video.volume = value;
+  VolumeTxt.innerHTML = Math.round(value*100)+'%'
+}
+
+function myCreateFunction() {
+    var table = document.getElementById("myTable");
+    var row = table.insertRow(0);
+    var cell1 = row.insertCell(0);
+    cell1.innerHTML = parseInt(VideoFrameVideo.currentTime);
+    cell2.innerHTML = "NEW CELL2";
+}
+
+function myDeleteFunction() {
+    document.getElementById("myTable").deleteRow(0);
+}
+
+function GetCellValues()
+{
+    var str = '';
+    var rows = document.getElementsByTagName('tr');
+    var table=document.getElementById("project");
+    for (var i=0;i<table.rows[0].cells.length;i++)
+    {
+        if (i > 2 )
+        {
+            str = str + table.rows[0].cells[3].innerHTML.replace(", ");
+        }
+        else
+        {
+            str = str + (table.rows[0].cells[i].innerHTML) + ', ' ;
+        }
+    }
+    for (var c = 1 ; c < rows.length ; c++)
+    {
+        str += '\n' + "0" + c + ', ';
+        var row = rows[c];
+        var inputs = row.getElementsByTagName('input');                
+        for (var k = 0 ; k < inputs.length ; k++)
+        if (k > 1)
+        {
+            str += inputs[k].value.replace(", ");
+        }
+        else 
+        {
+            str += inputs[k].value + ', ';
+        }
+    }   
+    document.getElementById('hide').value = str;
+}
+
+</script>
